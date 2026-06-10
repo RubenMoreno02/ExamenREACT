@@ -1,0 +1,7 @@
+{
+  "dependencies": {
+    "jwt-decode": "^4.0.0",
+    "react-route": "^1.0.3",
+    "yup": "^1.7.1"
+  }
+}
