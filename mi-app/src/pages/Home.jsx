@@ -26,8 +26,9 @@ function noteRot(id) {
 
 
 const Home = () => {
-       
-        return (
+  const [notes, setNotes] = useState([]);
+
+  return (
         <>
 
           {/* Posar just abans del </> del component principal */}
