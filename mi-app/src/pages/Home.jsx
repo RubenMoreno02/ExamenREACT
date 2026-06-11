@@ -1,6 +1,7 @@
 
 import { useState,useEffect } from "react";
 import { useAuth } from '../auth/AuthContext.jsx';
+import AltaModal from './AltaModal.jsx';
 
 
 
@@ -27,9 +28,27 @@ function noteRot(id) {
 
 const Home = () => {
   const [notes, setNotes] = useState([]);
+  const [modalOpen, setModalOpen] = useState(false);
+
+  const handleOpenModal = () => setModalOpen(true);
+  const handleCloseModal = () => setModalOpen(false);
+
+  const handleSaveNote = (noteData) => {
+    const newNote = {
+      id: Date.now(),
+      text: noteData.text,
+      color: noteData.color,
+      date: new Date().toLocaleDateString(),
+      user: "Usuario",
+      done: false,
+    };
+    setNotes([...notes, newNote]);
+    handleCloseModal();
+  };
 
   return (
         <>
+          <AltaModal isOpen={modalOpen} onClose={handleCloseModal} onSave={handleSaveNote} />
 
           {/* Posar just abans del </> del component principal */}
           <button
@@ -43,8 +62,7 @@ const Home = () => {
               fontSize: '1.5rem',
               zIndex: 1000,
             }}
-            data-bs-toggle="modal"
-            data-bs-target="#modalNovaNota"
+            onClick={handleOpenModal}
             title="Nova nota"
           >
             <i className="bi bi-plus-lg"></i>
