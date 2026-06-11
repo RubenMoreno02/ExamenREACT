@@ -1,218 +1,129 @@
-import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router'
-import { useAuth } from '../auth/AuthContext'
-import { useFormik } from 'formik'
+import { useState, useEffect } from 'react';
+import { useNavigate, NavLink } from 'react-router-dom';
+import { useAuth } from '../auth/AuthContext.jsx';
+import { useFormik } from 'formik';
 import * as Yup from 'yup';
 import axios from 'axios';
 
 const urlApi = import.meta.env.VITE_API_URL;
 
 const validationSchema = Yup.object({
-    email: Yup.string().email('El correo no es valido').required('El correo es obligatorio'),
-    password: Yup.string().min(6, "¡La contraseña es demasiado corta!").required("La contraseña es obligatoria")
+  email: Yup.string().email('El correo no es válido').required('El correo es obligatorio'),
+  password: Yup.string().min(6, 'La contraseña debe tener al menos 6 caracteres').required('La contraseña es obligatoria'),
 });
 
+export default function Login() {
+  const { login, isAuthenticated } = useAuth();
+  const navigate = useNavigate();
+  const [error, setError] = useState('');
 
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate('/home', { replace: true });
+    }
+  }, [isAuthenticated, navigate]);
 
+  const formik = useFormik({
+    initialValues: {
+      email: '',
+      password: '',
+    },
+    validationSchema,
+    onSubmit: async (values) => {
+      setError('');
 
-const Login = () => {
+      try {
+        const response = await axios.post(`${urlApi}auth/login`, values, {
+          headers: { 'Content-Type': 'application/json' },
+        });
 
+        const data = response.data;
+        const token = data.token ?? data.data?.token ?? data.jwt ?? data.data?.jwt ?? data.accessToken ?? data.data?.accessToken;
 
-    const { login, isAuthenticated } = useAuth();
-    const [error, setError] = useState('');
-    const navigate = useNavigate();
-
-    useEffect(() => {
-        if (isAuthenticated) {
-            navigate('/home', { replace: true });
+        if (!token) {
+          setError(data.message || 'Error al iniciar sesión');
+          return;
         }
-    }, [isAuthenticated]);
 
-
-    const formik = useFormik({
-        initialValues: {
-            'email': '',
-            'password': ''
-        },
-        validationSchema,
-        onSubmit: (values) => {
-            console.log(values);
-            // fetch a login
-            fetch(`${urlApi}auth/login`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(values),
-            })
-                .then(response => response.json())
-                .then(data => {
-                    console.log(data)
-                    if (data.success == false) {
-                        setError(data.message)
-                    } else {
-                        login(data.token)
-                        navigate('/home', { replace: true });
-                    }
-                }
-                )
-                .catch(error =>
-                    setError(error.message)
-                )
-            /*
-              .catch(errorApi =>{
-              setError(errorApi)
-            */
-        }
-    });
-
-    return (
-        <>
-            <h1>Inicio de sesión</h1>
-            <form onSubmit={formik.handleSubmit} noValidate>
-                <div className="">
-                    <label htmlFor="email">Correo Electrónico</label>
-                </div>
-                <div className="">
-                    <input
-                        type="email"
-                        name='email'
-                        value={formik.values.email}
-                        onChange={formik.handleChange}
-                        onBlur={formik.handleBlur}
-                    />
-                </div>
-                <div className="">
-                    {formik.touched.email && formik.errors.email && (
-                        <span className="text-danger">{formik.errors.email}</span>
-                    )}
-                </div>
-                <div className="">
-                    <label htmlFor="password">Contraseña</label>
-                </div>
-                <div className="">
-                    <input
-                        type="password"
-                        name='password'
-                        value={formik.values.password}
-                        onChange={formik.handleChange}
-                        onBlur={formik.handleBlur}
-                    />
-                </div>
-                <div className="">
-                    {formik.touched.password && formik.errors.password && (
-                        <span className="text-danger">{formik.errors.password}</span>
-                    )}
-                </div>
-                <p className='m-0 py-2 text-danger'>{error}</p>
-                <div className="">
-                    <button type="submit" className='btn btn-dark'>Enviar</button>
-                </div>
-            </form>
-        </>
-    )
-}
-
-export default Login
-
-/*
-import {useState} from 'react'
-import {useNavigate} from 'react-router';
-import { useAuth } from '../auth/AuthContext';
-import {useFormik} from 'formik';
-import * as Yup from 'yup';
-
-const apiUrl = import.meta.env.VITE_API_URL;
-// definr esquema YUP
-const validationSchema = Yup.object({
-  email: Yup.string().email('el email no es valido').required('el correo es obligatorio'),
-  password: Yup.string().min(6,"la contraseña es demasiado corta!").required("la contraseña es obligtoria")
-})
-
-
-const Login = () => {
-
-const {login, isAuthentificated } =useAuth();
-const navigate = useNavigate();
-const {error,setError}= useState('');
-
-if (isAuthentificated) {
-     navigate ('/home',{replace: true});
-}
-
-const formik = useFormik ({
-  initialValues: {'email':'', 'password':''},
-  validationSchema,
-  onSubmit: (values) => {
-    console.log(values)
-    // fetch a login
-    fetch(`${apiUrl}auth/login`,{
-      method :"POST",
-      headers : {'Content-Type':'application/json'},
-      body: JSON.stringify(values)
-      })
-      .then(response => response.json())
-      .then(data =>{
-         console.log(data)
-         if(data.success==false){
-            setError(data.message)
-         }else{
-            login(data.token)
-            //navigate('/home');
-         }
-      
-        })
-       .catch(errorApi =>{
-        setError(errorApi)
-  })
-
-
-  }
-})
+        login(token);
+        navigate('/home');
+      } catch (err) {
+        setError(err.response?.data?.message || err.message || 'Error al iniciar sesión');
+      }
+    },
+  });
 
   return (
     <>
-    <h1>Inicio de sesión</h1>
-      <form onSubmit={formik.handleSubmit} noValidate>
-        <div>
-          <label htmlFor='email'>Correu Electronic </label>
-        </div>
-        <div>
-          <input 
-            name='email' 
-            type='email'
-            value={formik.values.email}
-            onChange ={formik.handleChange}
-            onBlur={formik.handleBlur}
-          />
-        </div>
-        {formik.touched.email && formik.errors.email && (
-          <span className='text-danger' >{formik.errors.email}</span>
-        )} 
+      <div className="position-relative p-2" style={{ zIndex: 1 }}>
+        <div className="d-flex justify-content-center align-items-center min-vh-100">
+          <div className="col-12 col-md-6 col-lg-4 p-4">
+            <form onSubmit={formik.handleSubmit} noValidate>
+              <div className="login-field mb-3">
+                <label className="login-label form-label" htmlFor="email">
+                  Correu electrònic
+                </label>
+                <div className="login-input-wrap">
+                  <input
+                    id="email"
+                    type="email"
+                    name="email"
+                    className="form-control"
+                    placeholder="nom@empresa.com"
+                    autoComplete="email"
+                    value={formik.values.email}
+                    onChange={formik.handleChange}
+                    onBlur={formik.handleBlur}
+                  />
+                </div>
+                {formik.touched.email && formik.errors.email && (
+                  <span className="text-danger">{formik.errors.email}</span>
+                )}
+              </div>
 
-        <div>
-          <label htmlFor='password'>Contraseña </label>
-        </div>
-        <div>
-          <input 
-            name='password' 
-            type='password'
-            value={formik.values.password}
-            onChange ={formik.handleChange}
-            onBlur={formik.handleBlur}
-          />
-        </div>
-        {formik.touched.password && formik.errors.password && (
-          <span className='text-danger' >{formik.errors.password}</span>
-        )} 
-        <p className='text-danger'>{error}</p>
-        <div>
-          <button type='submit' className='btn btn-primary mt-2'>Enviar</button>
-        </div>
-        
+              <div className="login-field mb-4">
+                <div className="login-label-row">
+                  <label className="login-label form-label" htmlFor="password">
+                    Contrasenya
+                  </label>
+                </div>
+                <div className="login-input-wrap">
+                  <input
+                    id="password"
+                    type="password"
+                    name="password"
+                    className="form-control"
+                    placeholder="••••••••"
+                    autoComplete="current-password"
+                    value={formik.values.password}
+                    onChange={formik.handleChange}
+                    onBlur={formik.handleBlur}
+                  />
+                </div>
+                {formik.touched.password && formik.errors.password && (
+                  <span className="text-danger">{formik.errors.password}</span>
+                )}
+              </div>
 
-      </form>
-        
+              {error && <p className="text-danger">{error}</p>}
+
+              <button
+                type="submit"
+                className="tablon-btn-add d-flex align-items-center gap-2 border-0 rounded-2 px-3 py-2 fw-500"
+                style={{ background: '#F5E6C8', color: '#3B1F07', fontSize: 13, cursor: 'pointer' }}
+              >
+                Iniciar sesión
+              </button>
+
+              <div className="mt-3">
+                <p className="mb-0">
+                  ¿No tienes cuenta? <NavLink to="/registro">Regístrate</NavLink>
+                </p>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
     </>
-  )
+  );
 }
-
-export default Login*/
