@@ -3,6 +3,8 @@ import { jwtDecode } from "jwt-decode";
 import axios from "axios";
 
 const urlApi = import.meta.env.VITE_API_URL;
+const authMePath = import.meta.env.VITE_AUTH_ME;
+const authLogoutPath = import.meta.env.VITE_AUTH_LOGOUT;
 
 const AuthContext = createContext(null);
 let logoutTimer;
@@ -18,7 +20,7 @@ export function AuthProvider({ children }) {
     localStorage.setItem("token", jwt);
     setToken(jwt);
     axios
-      .get(`${urlApi}/auth/me`, {
+      .get(`${urlApi}${authMePath}`, {
         headers: {
           Accept: "application/json",
           Authorization: `Bearer ${jwt}`,
@@ -34,7 +36,26 @@ export function AuthProvider({ children }) {
     startLogoutTimer(decoded.exp);
   };
 
-  const logout = () => {
+  const logout = async () => {
+    const storedToken = token || localStorage.getItem("token");
+
+    if (storedToken) {
+      try {
+        await axios.post(
+          `${urlApi}${authLogoutPath}`,
+          null,
+          {
+            headers: {
+              Accept: "application/json",
+              Authorization: `Bearer ${storedToken}`,
+            },
+          },
+        );
+      } catch (error) {
+        console.warn("Logout request failed:", error);
+      }
+    }
+
     localStorage.removeItem("token");
     localStorage.removeItem("user");
     setToken(null);

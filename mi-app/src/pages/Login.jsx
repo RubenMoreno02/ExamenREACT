@@ -6,6 +6,7 @@ import * as Yup from 'yup';
 import axios from 'axios';
 
 const urlApi = import.meta.env.VITE_API_URL;
+const loginPath = import.meta.env.VITE_AUTH_LOGIN;
 
 const validationSchema = Yup.object({
   email: Yup.string().email('El correo no es válido').required('El correo es obligatorio'),
@@ -33,7 +34,7 @@ export default function Login() {
       setError('');
 
       try {
-        const response = await axios.post(`${urlApi}auth/login`, values, {
+        const response = await axios.post(`${urlApi}${loginPath}`, values, {
           headers: { 'Content-Type': 'application/json' },
         });
 

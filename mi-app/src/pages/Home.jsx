@@ -1,9 +1,8 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from '../auth/AuthContext.jsx';
 import AltaModal from './AltaModal.jsx';
-
-
+import axios from "axios";
 
 const COLORS = [
   { cls: "note-yellow", hex: "#FFF9C4" },
@@ -25,52 +24,160 @@ function noteRot(id) {
   return ((id * 7919) % 9) - 4;
 }
 
+const loadNotesFromStorage = () => {
+  try {
+    const stored = localStorage.getItem('notes');
+    return stored ? JSON.parse(stored) : [];
+  } catch (error) {
+    console.error('Error loading notes:', error);
+    return [];
+  }
+};
+
+const saveNotesToStorage = (notes) => {
+  try {
+    localStorage.setItem('notes', JSON.stringify(notes));
+  } catch (error) {
+    console.error('Error saving notes:', error);
+  }
+};
 
 const Home = () => {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const [notes, setNotes] = useState([]);
   const [modalOpen, setModalOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  const urlApi = import.meta.env.VITE_API_URL;
+  const notesAllPath = import.meta.env.VITE_NOTES_ALL;
+  const notesUserPath = import.meta.env.VITE_NOTES_USER;
+  const notesTogglePath = import.meta.env.VITE_NOTES_TOGGLE;
+  const notesDeletePath = import.meta.env.VITE_NOTES_DELETE;
+
+  const getAxiosConfig = () => ({
+    headers: {
+      Accept: "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  useEffect(() => {
+    const loadNotes = async () => {
+      try {
+        setLoading(true);
+        const response = await axios.get(`${urlApi}${notesAllPath}`, getAxiosConfig());
+        
+        const apiNotes = response.data.data ?? response.data ?? [];
+        setNotes(Array.isArray(apiNotes) ? apiNotes : []);
+      } catch (error) {
+        console.error('Error loading notes from API:', error);
+        const loadedNotes = loadNotesFromStorage();
+        setNotes(loadedNotes);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (token) {
+      loadNotes();
+    }
+  }, [token]);
 
   const currentUserId = user?.id?.toString() ?? user?.email ?? user?.name ?? null;
   const currentUserName = user?.name ?? user?.email ?? "Usuario";
 
+  const isOwner = (note) => {
+    if (!note || !note.userId) return false;
+    return note.userId.toString() === currentUserId?.toString();
+  };
+
   const handleOpenModal = () => setModalOpen(true);
   const handleCloseModal = () => setModalOpen(false);
 
-  const handleSaveNote = (noteData) => {
-    const newNote = {
-      id: Date.now(),
-      text: noteData.text,
-      color: noteData.color,
-      date: new Date().toLocaleDateString(),
-      userName: currentUserName,
-      userId: currentUserId,
-      done: false,
-    };
-    setNotes([...notes, newNote]);
-    handleCloseModal();
+  const handleSaveNote = async (noteData) => {
+    try {
+      const newNote = {
+        text: noteData.text,
+        color: noteData.color,
+      };
+      
+      const response = await axios.post(
+        `${urlApi}${notesUserPath}`,
+        newNote,
+        getAxiosConfig()
+      );
+      
+      const savedNote = response.data.data ?? response.data ?? newNote;
+      const noteWithMetadata = {
+        ...savedNote,
+        date: new Date().toLocaleDateString(),
+        userName: currentUserName,
+        userId: currentUserId,
+        done: false,
+      };
+      
+      const updatedNotes = [...notes, noteWithMetadata];
+      setNotes(updatedNotes);
+      saveNotesToStorage(updatedNotes);
+      handleCloseModal();
+    } catch (error) {
+      console.error('Error saving note to API:', error);
+      alert('Error al guardar la nota');
+    }
   };
 
-  const handleToggleDone = (noteId) => {
-    const note = notes.find((item) => item.id === noteId);
-    if (!note || note.userId !== currentUserId) {
-      alert("Solo el creador puede marcar o desmarcar esta nota.");
-      return;
-    }
-    setNotes((prevNotes) =>
-      prevNotes.map((item) =>
+  const handleToggleDone = async (noteId) => {
+    try {
+      const note = notes.find((item) => item.id === noteId);
+      if (!note || !isOwner(note)) {
+        alert("Solo el creador puede marcar o desmarcar esta nota.");
+        return;
+      }
+      
+      await axios.patch(
+        `${urlApi}${notesTogglePath}/${noteId}`,
+        { done: !note.done },
+        getAxiosConfig()
+      );
+      
+      const updatedNotes = notes.map((item) =>
         item.id === noteId ? { ...item, done: !item.done } : item
-      )
-    );
+      );
+      setNotes(updatedNotes);
+      saveNotesToStorage(updatedNotes);
+    } catch (error) {
+      console.error('Error toggling note in API:', error);
+      alert('Error al actualizar la nota');
+    }
   };
 
-  const handleDeleteNote = (noteId) => {
-    const note = notes.find((item) => item.id === noteId);
-    if (!note || note.userId !== currentUserId) {
-      alert("Solo el creador puede eliminar esta nota.");
-      return;
+  const handleDeleteNote = async (noteId) => {
+    try {
+      const note = notes.find((item) => item.id === noteId);
+      if (!note) {
+        alert("Nota no encontrada.");
+        return;
+      }
+      if (!window.confirm("¿Quieres eliminar este anuncio?")) {
+        return;
+      }
+      
+      await axios.delete(
+        `${urlApi}${notesDeletePath}/${noteId}`,
+        getAxiosConfig()
+      );
+      
+      const updatedNotes = notes.filter((item) => item.id !== noteId);
+      setNotes(updatedNotes);
+      saveNotesToStorage(updatedNotes);
+    } catch (error) {
+      console.error('Error deleting note from API:', error);
+      if (error.response?.status === 403) {
+        alert('No tienes permiso para eliminar esta nota');
+      } else {
+        alert('Error al eliminar la nota');
+      }
     }
-    setNotes((prevNotes) => prevNotes.filter((item) => item.id !== noteId));
   };
 
   return (
@@ -103,7 +210,13 @@ const Home = () => {
          {/* Contenido sobre el corcho */}
            <div className="position-relative p-2" style={{ zIndex: 1 }}>
 
-          {notes.length === 0 ? (
+          {loading ? (
+               <div className="d-flex flex-column align-items-center justify-content-center py-5 gap-2"
+                   style={{ color: "rgba(80,40,5,0.45)" }}>
+                <span style={{ fontSize: 36 }}>⏳</span>
+                <p className="mb-0" style={{ fontSize: 13 }}>Cargando anuncios...</p>
+              </div>
+            ) : notes.length === 0 ? (
                <div className="d-flex flex-column align-items-center justify-content-center py-5 gap-2"
                    style={{ color: "rgba(80,40,5,0.45)" }}>
                 <span style={{ fontSize: 36 }}>📌</span>
@@ -112,14 +225,13 @@ const Home = () => {
             ) : (
              <div className="d-flex flex-wrap gap-3" style={{ alignContent: "flex-start" }}>
                 {notes.map(note => {
-                  const isOwner = note.userId && note.userId === currentUserId;
+                  const canEdit = isOwner(note);
                   return (
                     <div key={note.id} className="col">
                     <div
                       className={`tablon-note${note.done ? " done" : ""}`}
                       style={{
                         background: NOTE_BG[note.color],
-                        transform: `rotate(${noteRot(note.id)}deg)`,
                       }}
                     >
                       <div className="tablon-note-pin" />
@@ -132,8 +244,8 @@ const Home = () => {
                         <button
                           type="button"
                           className="tablon-note-btn done-btn"
-                          disabled={!isOwner}
-                          title={isOwner ? "" : "Solo el creador puede completar esta nota"}
+                          disabled={!canEdit}
+                          title={canEdit ? "" : "Solo el creador puede completar esta nota"}
                           aria-label={note.done ? "Marcar pendiente" : "Marcar completada"}
                           onClick={() => handleToggleDone(note.id)}
                         >
@@ -142,8 +254,8 @@ const Home = () => {
                         <button
                           type="button"
                           className="tablon-note-btn del-btn"
-                          disabled={!isOwner}
-                          title={isOwner ? "" : "Solo el creador puede eliminar esta nota"}
+                          disabled={false}
+                          title="Eliminar nota"
                           aria-label="Eliminar nota"
                           onClick={() => handleDeleteNote(note.id)}
                         >
